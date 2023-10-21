@@ -1,0 +1,48 @@
+# Compiled object files
+*.o
+*.out
+*.obj
+
+# Compiled dynamic libraries (shared libraries)
+*.so
+*.dll
+*.dylib
+
+# Executables
+*.exe
+*.app
+
+# Build directories
+build/
+bin/
+
+# Visual Studio Code specific files and directories
+.vscode/
+.vscodeignore
+
+# CMake build directory
+CMakeFiles/
+CMakeCache.txt
+CMakeScripts/
+
+# Makefile
+Makefile
+
+# Dependency directories
+deps/
+
+# Compiled Python files
+__pycache__/
+
+# Logs and databases
+*.log
+*.sqlite
+
+# Package files
+*.tar.gz
+*.tgz
+*.zip
+
+# Ignore any local user-specific files
+.DS_Store
+Thumbs.db
