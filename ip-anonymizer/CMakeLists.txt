@@ -1,22 +1,12 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.12)
+project(ip-anonymizer)
 
-project(anonymizer)
-
-# Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# Include directories
-include_directories(${PROJECT_SOURCE_DIR}/include)
+add_subdirectory(external/clickhouse-cpp)
 
-# Find all source files
-file(GLOB SOURCES "src/*.cpp")
+add_executable(${PROJECT_NAME} "src/main.cpp")
 
-# Output directory for binaries
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
+target_include_directories(${PROJECT_NAME} PRIVATE external/clickhouse-cpp/ external/clickhouse-cpp/contrib/absl)
 
-# Create executable
-add_executable(anonymizer ${SOURCES})
-
-# Link libraries
-target_link_libraries(anonymizer cppkafka clickhouse-cpp-client spdlog boost_system)
+target_link_libraries(${PROJECT_NAME} PRIVATE clickhouse-cpp-lib)
