@@ -1,12 +1,38 @@
 #include <clickhouse/client.h>
 
+#include <chrono>
 #include <iostream>
+#include <thread>
 
 using namespace clickhouse;
 
+std::unique_ptr<Client> initializeClickHouseConnection() {
+    const int max_retries = 10;
+    for (int i = 0; i < max_retries; ++i) {
+        try {
+            auto client = std::make_unique<Client>(
+                ClientOptions().SetHost("clickhouse-server"));
+            client->Execute(
+                "SELECT 1");  // Simple query to check the connection
+            return client;
+        } catch (const std::exception& e) {
+            std::cerr << "Failed to connect, retrying in 5 seconds... ("
+                      << i + 1 << "/" << max_retries << ")\n";
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+        }
+    }
+
+    return nullptr;
+}
+
 int testClickhouse() {
-    /// Initialize client connection.
-    Client client(ClientOptions().SetHost("localhost"));
+    auto client_ptr = initializeClickHouseConnection();
+    if (!client_ptr) {
+        std::cerr
+            << "Failed to connect to ClickHouse after multiple retries.\n";
+        return 1;  // Return error code
+    }
+    Client& client = *client_ptr;
 
     /// Create a table.
     client.Execute(
@@ -47,7 +73,10 @@ int testClickhouse() {
 }
 
 int main() {
-    std::cout << "Hello, World!" << std::endl;
+    if (testClickhouse()) {
+        std::cout << "Clickhouse connection test failed\n";
+    } else {
+        std::cout << "Clickhouse connection test passed\n";
+    }
     return 0;
-    // return testClickhouse();
 }

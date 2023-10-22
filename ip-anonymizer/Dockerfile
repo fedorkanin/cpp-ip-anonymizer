@@ -19,14 +19,6 @@ RUN git clone --branch 0.4.0 https://github.com/mfontanini/cppkafka.git -4 && \
     make && \
     make install
 
-# Clone and build clickhouse-cpp
-RUN git clone --branch v2.5.1 https://github.com/ClickHouse/clickhouse-cpp.git -4 && \
-    mkdir clickhouse-cpp/build && \
-    cd clickhouse-cpp/build && \
-    cmake .. && \
-    make && \
-    make install
-
 # Copy the source code and CMakeLists.txt into the container
 COPY src /app/src
 COPY include /app/include

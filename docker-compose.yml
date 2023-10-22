@@ -131,7 +131,8 @@ services:
 
   ip-anonymizer:
     build: ip-anonymizer
-    depends_on:
-      - broker  
-      - ch-proxy  
     container_name: ip-anonymizer
+    depends_on:
+      - broker
+      - ch-proxy
+      - clickhouse-server
