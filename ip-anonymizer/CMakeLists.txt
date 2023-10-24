@@ -18,9 +18,12 @@ target_include_directories(${PROJECT_NAME}
         include/
 )
 
+find_package(CppKafka REQUIRED)
+
 target_link_libraries(${PROJECT_NAME} 
     PRIVATE 
+        CppKafka::cppkafka
         clickhouse-cpp-lib
-        capnp  # Main Cap'n Proto library for serialization/deserialization
+        capnp  
         #capnp-rpc  # Uncomment for Cap'n Proto's RPC features
 )

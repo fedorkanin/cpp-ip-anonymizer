@@ -10,34 +10,26 @@ RUN apt-get update && \
     apt-get install -y libboost-all-dev && \
     apt-get install -y librdkafka-dev && \
     apt-get install -y libssl-dev
+    # apt-get install -y capnproto
 
-# cd capnproto/c++
-# autoreconf -i
-# ./configure
-# make -j6 check
-# sudo make install
-
-# Build capnproto
-COPY external/capnproto /app/external/capnproto
-RUN cd external/capnproto/c++ && \
+# Clone and build capnproto
+RUN git clone --branch v1.0.1 https://github.com/capnproto/capnproto.git && \
+    cd capnproto/c++ && \
     autoreconf -i && \
     ./configure && \
     make -j6 check && \
     make install
 
-
-# Build cppkafka
-COPY external/cppkafka /app/cppkafka
-RUN mkdir cppkafka/build && \
+# Clone and build cppkafka
+RUN git clone --branch 0.4.0 https://github.com/mfontanini/cppkafka.git -4 && \
+    mkdir cppkafka/build && \
     cd cppkafka/build && \
     cmake .. && \
     make && \
     make install
 
-# Copy clickhouse-cpp
-COPY external/clickhouse-cpp /app/external/clickhouse-cpp
-
 # Copy the source code and CMakeLists.txt into the container
+COPY external /app/external
 COPY src /app/src
 COPY include /app/include
 COPY CMakeLists.txt /app
@@ -48,12 +40,22 @@ RUN mkdir build && \
     cmake .. && \
     make
 
-# Run Stage
+# Find and copy required shared libraries
+RUN mkdir -p /app/libs && \
+    ldd /app/build/ip-anonymizer | grep "=> /" | awk '{print $3}' | xargs -I '{}' cp -v '{}' /app/libs
+
+
+# ====================RUN STAGE====================
 FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# Copy the compiled binary from the build stage
+COPY --from=build /app/libs /usr/local/lib
 COPY --from=build /app/build/ip-anonymizer /app
 
+# Reconfigure the dynamic linker run-time bindings
+RUN ldconfig
+
 CMD ["./ip-anonymizer"]
+
+
