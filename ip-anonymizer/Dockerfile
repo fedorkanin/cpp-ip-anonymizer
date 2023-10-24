@@ -26,21 +26,13 @@ RUN cd external/capnproto/c++ && \
     make install
 
 
-# Clone and build cppkafka
-RUN git clone --branch 0.4.0 https://github.com/mfontanini/cppkafka.git -4 && \
-    mkdir cppkafka/build && \
+# Build cppkafka
+COPY external/cppkafka /app/cppkafka
+RUN mkdir cppkafka/build && \
     cd cppkafka/build && \
     cmake .. && \
     make && \
     make install
-
-# Build cppkafka
-# COPY external/cppkafka /app/cppkafka
-# RUN mkdir cppkafka/build && \
-#     cd cppkafka/build && \
-#     cmake .. && \
-#     make && \
-#     make install
 
 # Copy clickhouse-cpp
 COPY external/clickhouse-cpp /app/external/clickhouse-cpp
