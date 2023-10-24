@@ -3,10 +3,24 @@ project(ip-anonymizer)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# Gather all .cpp files from the src directory
+file(GLOB SRC_FILES src/*.cpp)
+
 add_subdirectory(external/clickhouse-cpp)
 
-add_executable(${PROJECT_NAME} "src/main.cpp")
+# Add SRC_FILES to your executable
+add_executable(${PROJECT_NAME} ${SRC_FILES})
 
-target_include_directories(${PROJECT_NAME} PRIVATE external/clickhouse-cpp/ external/clickhouse-cpp/contrib/absl)
+target_include_directories(${PROJECT_NAME} 
+    PRIVATE 
+        external/clickhouse-cpp/ 
+        external/clickhouse-cpp/contrib/absl 
+        include/
+)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE clickhouse-cpp-lib)
+target_link_libraries(${PROJECT_NAME} 
+    PRIVATE 
+        clickhouse-cpp-lib
+        capnp  # Main Cap'n Proto library for serialization/deserialization
+        #capnp-rpc  # Uncomment for Cap'n Proto's RPC features
+)

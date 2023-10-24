@@ -11,6 +11,21 @@ RUN apt-get update && \
     apt-get install -y librdkafka-dev && \
     apt-get install -y libssl-dev
 
+# cd capnproto/c++
+# autoreconf -i
+# ./configure
+# make -j6 check
+# sudo make install
+
+# Build capnproto
+COPY external/capnproto /app/external/capnproto
+RUN cd external/capnproto/c++ && \
+    autoreconf -i && \
+    ./configure && \
+    make -j6 check && \
+    make install
+
+
 # Clone and build cppkafka
 RUN git clone --branch 0.4.0 https://github.com/mfontanini/cppkafka.git -4 && \
     mkdir cppkafka/build && \
@@ -19,10 +34,20 @@ RUN git clone --branch 0.4.0 https://github.com/mfontanini/cppkafka.git -4 && \
     make && \
     make install
 
+# Build cppkafka
+# COPY external/cppkafka /app/cppkafka
+# RUN mkdir cppkafka/build && \
+#     cd cppkafka/build && \
+#     cmake .. && \
+#     make && \
+#     make install
+
+# Copy clickhouse-cpp
+COPY external/clickhouse-cpp /app/external/clickhouse-cpp
+
 # Copy the source code and CMakeLists.txt into the container
 COPY src /app/src
 COPY include /app/include
-COPY external /app/external
 COPY CMakeLists.txt /app
 
 # Build the application
