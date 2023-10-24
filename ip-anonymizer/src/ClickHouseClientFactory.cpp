@@ -3,10 +3,13 @@
 #include <chrono>
 #include <iostream>
 #include <thread>
+#include <tuple>
+#include <vector>
 
 const unsigned    MAX_RETRIES   = 10;
 const unsigned    RETRY_TIMEOUT = 2;
 const std::string DEFAULT_HOST  = "clickhouse-server";
+using DataRow                   = std::tuple<uint64_t, std::string>;
 
 std::unique_ptr<clickhouse::Client>
 ClickHouseClientFactory::createClickHouseClient(const std::string& host) {
@@ -38,56 +41,65 @@ int ClickHouseClientFactory::testClickhouse() {
         return 1;
     }
 
-    clickhouse::Client& client = *client_ptr;
+    clickhouse::Client&  client = *client_ptr;
 
+    std::vector<DataRow> inserted_values = {{1, "one"}, {7, "seven"}};
+    createAndPopulateTable(client, inserted_values);
+
+    bool check_passed = checkValues(client, inserted_values);
+
+    client.Execute("DROP TABLE default.numbers");
+
+    return !check_passed;
+}
+
+void ClickHouseClientFactory::createAndPopulateTable(
+    clickhouse::Client& client, const std::vector<DataRow>& values) {
     std::cout << "Creating table" << std::endl;
-
-    /// Create a table.
     client.Execute(
-        "CREATE TABLE IF NOT EXISTS default.numbers (id UInt64, name "
-        "String) ENGINE = Memory");
+        "CREATE TABLE IF NOT EXISTS default.numbers (id UInt64, name String) "
+        "ENGINE = Memory");
 
     std::cout << "Inserting values" << std::endl;
-    /// Insert some values.
-    {
-        clickhouse::Block block;
+    clickhouse::Block block;
 
-        std::cout << "Creating columns" << std::endl;
-        auto id = std::make_shared<clickhouse::ColumnUInt64>();
-        id->Append(1);
-        id->Append(7);
+    auto              id   = std::make_shared<clickhouse::ColumnUInt64>();
+    auto              name = std::make_shared<clickhouse::ColumnString>();
 
-        std::cout << "Creating columns 2" << std::endl;
-        auto name = std::make_shared<clickhouse::ColumnString>();
-        name->Append("one");
-        name->Append("seven");
-
-        std::cout << "Appending columns" << std::endl;
-        block.AppendColumn("id", id);
-        block.AppendColumn("name", name);
-
-        std::cout << "Inserting block" << std::endl;
-        client.Insert("default.numbers", block);
+    for (const auto& [id_value, name_value] : values) {
+        id->Append(id_value);
+        name->Append(name_value);
     }
 
-    std::cout << "Selecting values" << std::endl;
-    /// Select values inserted in the previous step.
+    block.AppendColumn("id", id);
+    block.AppendColumn("name", name);
+
+    client.Insert("default.numbers", block);
+}
+
+bool ClickHouseClientFactory::checkValues(clickhouse::Client&         client,
+                                          const std::vector<DataRow>& values) {
+    bool all_values_match = true;
     client.Select("SELECT id, name FROM default.numbers",
-                  [](const clickhouse::Block& block) {
+                  [&](const clickhouse::Block& block) {
                       for (size_t i = 0; i < block.GetRowCount(); ++i) {
-                          std::cout
-                              << block[0]->As<clickhouse::ColumnUInt64>()->At(
-                                     i)  // NOTE: Corrected type here
-                              << " "
-                              << block[1]->As<clickhouse::ColumnString>()->At(i)
-                              << "\n";
+                          uint64_t returned_id =
+                              block[0]->As<clickhouse::ColumnUInt64>()->At(i);
+                          std::string returned_name = std::string(
+                              block[1]->As<clickhouse::ColumnString>()->At(i));
+
+                          if (returned_id != std::get<0>(values[i]) ||
+                              returned_name != std::get<1>(values[i])) {
+                              all_values_match = false;
+                              std::cout << "FAILED: Expected id: "
+                                        << std::get<0>(values[i])
+                                        << ", name: " << std::get<1>(values[i])
+                                        << ". Got id: " << returned_id
+                                        << ", name: " << returned_name
+                                        << std::endl;
+                          }
                       }
                   });
 
-    std::cout << "Dropping table" << std::endl;
-    /// Delete table.
-    client.Execute("DROP TABLE default.numbers");
-
-    std::cout << "Test passed, returning 0" << std::endl;
-    return 0;
+    return all_values_match;
 }
