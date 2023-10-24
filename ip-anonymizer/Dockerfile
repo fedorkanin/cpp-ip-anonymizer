@@ -34,15 +34,20 @@ COPY src /app/src
 COPY include /app/include
 COPY CMakeLists.txt /app
 
-# Build the application
-RUN mkdir build && \
-    cd build && \
+# Use cache mount for the build directory to speed up the build process between builds
+RUN --mount=type=cache,target=/app/build_cache mkdir -p /app/build_cache && \
+    cd /app/build_cache && \
     cmake .. && \
-    make
+    make && \
+    mkdir -p /app/build && \
+    cp ip-anonymizer /app/build/
 
 # Find and copy required shared libraries
 RUN mkdir -p /app/libs && \
-    ldd /app/build/ip-anonymizer | grep "=> /" | awk '{print $3}' | xargs -I '{}' cp -v '{}' /app/libs
+    ldd /app/build/ip-anonymizer | \
+    grep "=> /" | \
+    awk '{print $3}' | \
+    xargs -I '{}' cp -v '{}' /app/libs
 
 
 # ====================RUN STAGE====================

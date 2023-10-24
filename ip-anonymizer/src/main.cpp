@@ -8,9 +8,9 @@ using namespace std;
 using namespace cppkafka;
 
 // Configuration keys
-const string KAFKA_BROKER_LIST = "localhost:9092";
-const string KAFKA_TOPIC       = "http_log";
-const string KAFKA_GROUP_ID    = "data-engineering-task-reader";
+const string                        KAFKA_BROKER_LIST = "broker:29092";
+const string                        KAFKA_TOPIC       = "http_log";
+const string                        KAFKA_GROUP_ID    = "ip-anonymizer-reader";
 
 std::unique_ptr<cppkafka::Consumer> setupConsumer(
     const cppkafka::Configuration& config) {
@@ -47,18 +47,19 @@ int main() {
 
     // Kafka configuration
     cppkafka::Configuration config = {
-        {"metadata.broker.list",
-         "localhost:9092"},             // Replace with your broker list
-        {"group.id", "consumer_group"}  // Consumer group ID
+        {"metadata.broker.list", KAFKA_BROKER_LIST},
+        {"group.id", KAFKA_GROUP_ID},
     };
+
+    TopicConfiguration topic_config = {{"auto.offset.reset", "smallest"}};
+    config.set_default_topic_configuration(topic_config);
 
     // Setup the consumer
     std::unique_ptr<cppkafka::Consumer> consumer = setupConsumer(config);
 
     // Consume messages from the "http_log" topic with a 1 second timeout
-    std::cout << "Consuming messages from topic "
-              << "http_log" << std::endl;
-    consumeAndPrint(*consumer, "http_log", 1000);
+    std::cout << "Consuming messages from topic " << KAFKA_TOPIC << std::endl;
+    consumeAndPrint(*consumer, KAFKA_TOPIC, 1000);
 
     return 0;
 }

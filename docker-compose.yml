@@ -128,11 +128,11 @@ services:
     depends_on:
       - broker
     container_name: log-producer
-
+  
   ip-anonymizer:
-    build: ip-anonymizer
+    build:
+      ip-anonymizer
     container_name: ip-anonymizer
-    depends_on:
-      - broker
-      - ch-proxy
-      - clickhouse-server
+    volumes:
+      - ./build:/app/build
+
