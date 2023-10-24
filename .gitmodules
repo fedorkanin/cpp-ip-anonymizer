@@ -1,9 +1,4 @@
 [submodule "ip-anonymizer/external/clickhouse-cpp"]
 	path = ip-anonymizer/external/clickhouse-cpp
 	url = https://github.com/ClickHouse/clickhouse-cpp.git
-[submodule "ip-anonymizer/external/capnproto"]
-	path = ip-anonymizer/external/capnproto
-	url = https://github.com/capnproto/capnproto.git
-[submodule "ip-anonymizer/external/cppkafka"]
-	path = ip-anonymizer/external/cppkafka
-	url = https://github.com/mfontanini/cppkafka.git
+
