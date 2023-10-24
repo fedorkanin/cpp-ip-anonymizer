@@ -8,5 +8,6 @@ int main() {
     } else {
         std::cout << "PASSED: Clickhouse connection test passed\n";
     }
+
     return 0;
 }

@@ -13,15 +13,10 @@ using DataRow                   = std::tuple<uint64_t, std::string>;
 
 std::unique_ptr<clickhouse::Client>
 ClickHouseClientFactory::createClickHouseClient(const std::string& host) {
-    std::cout << "Creating ClickHouse client" << std::endl;
     for (int i = 0; i < MAX_RETRIES; ++i) {
         try {
-            std::cout << "Trying to create pointer to ClickHouse client"
-                      << std::endl;
             auto ptr = std::make_unique<clickhouse::Client>(
                 clickhouse::ClientOptions().SetHost(host));
-            std::cout << "Successfully created pointer to ClickHouse client"
-                      << std::endl;
             return ptr;
         } catch (const std::exception& e) {
             std::cout << "Failed to connect, retrying in " << RETRY_TIMEOUT
@@ -55,12 +50,10 @@ int ClickHouseClientFactory::testClickhouse() {
 
 void ClickHouseClientFactory::createAndPopulateTable(
     clickhouse::Client& client, const std::vector<DataRow>& values) {
-    std::cout << "Creating table" << std::endl;
     client.Execute(
         "CREATE TABLE IF NOT EXISTS default.numbers (id UInt64, name String) "
         "ENGINE = Memory");
 
-    std::cout << "Inserting values" << std::endl;
     clickhouse::Block block;
 
     auto              id   = std::make_shared<clickhouse::ColumnUInt64>();
