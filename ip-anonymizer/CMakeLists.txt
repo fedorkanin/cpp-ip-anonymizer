@@ -25,5 +25,6 @@ target_link_libraries(${PROJECT_NAME}
         CppKafka::cppkafka
         clickhouse-cpp-lib
         capnp  
+        kj
         #capnp-rpc  # Uncomment for Cap'n Proto's RPC features
 )

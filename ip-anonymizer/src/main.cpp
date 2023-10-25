@@ -1,40 +1,51 @@
+#include <capnp/message.h>
+#include <capnp/serialize.h>
+#include <cppkafka/consumer.h>
+
 #include <chrono>
 #include <iostream>
 
 #include "ClickHouseClientFactory.hpp"
-#include "cppkafka/consumer.h"
+#include "http_log.capnp.h"
 
-using namespace std;
-using namespace cppkafka;
+const std::string                   KAFKA_BROKER_LIST = "broker:29092";
+const std::string                   KAFKA_TOPIC       = "http_log";
+const std::string                   KAFKA_GROUP_ID    = "ip-anonymizer-reader";
 
-// Configuration keys
-const string                        KAFKA_BROKER_LIST = "broker:29092";
-const string                        KAFKA_TOPIC       = "http_log";
-const string                        KAFKA_GROUP_ID    = "ip-anonymizer-reader";
-
-std::unique_ptr<cppkafka::Consumer> setupConsumer(
+std::unique_ptr<cppkafka::Consumer> SetupConsumer(
     const cppkafka::Configuration& config) {
     return std::make_unique<cppkafka::Consumer>(config);
 }
 
-void consumeAndPrint(cppkafka::Consumer& consumer, const std::string& topic,
+std::string DecodeMessage(const cppkafka::Buffer& payload) {
+    kj::ArrayInputStream input_stream(
+        kj::arrayPtr(payload.get_data(), payload.get_size()));
+
+    capnp::InputStreamMessageReader message_reader(input_stream);
+
+    HttpLogRecord::Reader log_reader = message_reader.getRoot<HttpLogRecord>();
+
+    // Extract data from the log here
+    // For brevity, let's just get remoteAddr (more fields can be added
+    // similarly)
+    return log_reader.getRemoteAddr();
+}
+
+void ConsumeAndPrint(cppkafka::Consumer& consumer, const std::string& topic,
                      int timeout) {
     consumer.subscribe({topic});
-
-    // Set the timeout value
-    consumer.set_timeout(chrono::milliseconds(timeout));
+    consumer.set_timeout(std::chrono::milliseconds(timeout));
 
     while (true) {
-        // Poll for messages
         cppkafka::Message message = consumer.poll();
         if (message) {
-            // Check for errors
             if (message.get_error()) {
                 std::cerr << "Error while consuming message: "
                           << message.get_error() << std::endl;
             } else {
-                // Print the consumed message's payload
-                std::cout << "Received message: " << message.get_payload()
+                std::string decoded_message =
+                    DecodeMessage(message.get_payload());
+                std::cout << "Decoded message: " << decoded_message
                           << std::endl;
             }
         }
@@ -42,24 +53,19 @@ void consumeAndPrint(cppkafka::Consumer& consumer, const std::string& topic,
 }
 
 int main() {
-    assert(ClickHouseClientFactory::testClickhouse() == 0);
-    std::cout << "ClickHouse test passed\n";
-
-    // Kafka configuration
     cppkafka::Configuration config = {
         {"metadata.broker.list", KAFKA_BROKER_LIST},
         {"group.id", KAFKA_GROUP_ID},
     };
 
-    TopicConfiguration topic_config = {{"auto.offset.reset", "smallest"}};
+    cppkafka::TopicConfiguration topic_config = {
+        {"auto.offset.reset", "smallest"}};
     config.set_default_topic_configuration(topic_config);
 
-    // Setup the consumer
-    std::unique_ptr<cppkafka::Consumer> consumer = setupConsumer(config);
+    std::unique_ptr<cppkafka::Consumer> consumer = SetupConsumer(config);
 
-    // Consume messages from the "http_log" topic with a 1 second timeout
     std::cout << "Consuming messages from topic " << KAFKA_TOPIC << std::endl;
-    consumeAndPrint(*consumer, KAFKA_TOPIC, 1000);
+    ConsumeAndPrint(*consumer, KAFKA_TOPIC, 1000);
 
     return 0;
 }
