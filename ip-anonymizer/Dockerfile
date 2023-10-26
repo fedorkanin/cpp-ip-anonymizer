@@ -10,7 +10,6 @@ RUN apt-get update && \
     apt-get install -y libboost-all-dev && \
     apt-get install -y librdkafka-dev && \
     apt-get install -y libssl-dev
-    # apt-get install -y capnproto
 
 # Clone and build capnproto
 RUN git clone --branch v1.0.1 https://github.com/capnproto/capnproto.git && \

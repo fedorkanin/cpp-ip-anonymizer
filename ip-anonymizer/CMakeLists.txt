@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 project(ip-anonymizer)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 # Gather all .cpp files from the src directory
 file(GLOB SRC_FILES src/*.cpp)
