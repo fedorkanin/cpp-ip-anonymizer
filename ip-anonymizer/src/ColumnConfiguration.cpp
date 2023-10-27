@@ -33,6 +33,9 @@ void ColumnBuffer::append(const cppkafka::Buffer& payload) {
                 } else if constexpr (std::is_same_v<T, std::string>) {
                     std::static_pointer_cast<ch::ColumnString>(config.col_ptr)
                         ->Append(arg);
+                } else if constexpr (std::is_same_v<T, std::time_t>) {
+                    std::static_pointer_cast<ch::ColumnDateTime>(config.col_ptr)
+                        ->Append(arg);
                 }
             },
             value);
@@ -47,9 +50,10 @@ void ColumnBuffer::clearColumns() {
 std::vector<ColTriplet> getFreshColumns() {
     return {ColTriplet{"timestamp",
                        [](const HttpLogRecord::Reader& log_record) {
-                           return log_record.getTimestampEpochMilli();
+                           return static_cast<time_t>(
+                               log_record.getTimestampEpochMilli() / 1000);
                        },
-                       std::make_shared<ch::ColumnUInt64>()},
+                       std::make_shared<ch::ColumnDateTime>()},
             ColTriplet{"resource_id",
                        [](const HttpLogRecord::Reader& log_record) {
                            return log_record.getResourceId();

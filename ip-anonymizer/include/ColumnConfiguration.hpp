@@ -11,7 +11,7 @@
 
 namespace ch = clickhouse;
 
-using ReturnType = std::variant<uint64_t, uint16_t, std::string>;
+using ReturnType = std::variant<uint64_t, uint16_t, std::string, std::time_t>;
 using Col64Ptr   = std::shared_ptr<ch::ColumnUInt64>;
 using Col16Ptr   = std::shared_ptr<ch::ColumnUInt16>;
 using ColStrPtr  = std::shared_ptr<ch::ColumnString>;

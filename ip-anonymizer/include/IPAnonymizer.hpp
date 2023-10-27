@@ -23,7 +23,6 @@ class IPAnonymizer {
    private:
     std::unique_ptr<cppkafka::Consumer> consumer_;
     std::unique_ptr<clickhouse::Client> ch_client_;
-    const size_t                        MAX_BUFFER_SIZE = 1;
 
     std::string anonymizeIP(const std::string ip_address);
     void        handleMessageError(const cppkafka::Error& error);

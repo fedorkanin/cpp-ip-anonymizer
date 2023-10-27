@@ -23,5 +23,10 @@ int               main() {
         {{"auto.offset.reset", "smallest"}});
 
     IPAnonymizer ipAnonymizer(kafka_config, CLICKHOUSE_HOST);
-    ipAnonymizer.consumeAndBufferLogs(KAFKA_TOPIC, 1000);
+
+    try {
+        ipAnonymizer.consumeAndBufferLogs(KAFKA_TOPIC, 1000);
+    } catch (const std::exception& e) {
+        std::cout << e.what() << std::endl;
+    }
 }
