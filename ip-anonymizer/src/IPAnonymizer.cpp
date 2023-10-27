@@ -9,6 +9,8 @@
 #include <sstream>
 #include <variant>
 
+#include "ColumnBuffer.hpp"
+#include "ColumnConfiguration.hpp"
 #include "http_log.capnp.h"
 
 namespace ch = clickhouse;
@@ -27,93 +29,21 @@ std::string IPAnonymizer::anonymizeIP(const std::string ip_address) {
     return ip_address.substr(0, lastDotPos) + ".X";
 }
 
-using Col64Ptr  = std::shared_ptr<ch::ColumnUInt64>;
-using Col16Ptr  = std::shared_ptr<ch::ColumnUInt16>;
-using ColStrPtr = std::shared_ptr<ch::ColumnString>;
-using ColPtr    = std::shared_ptr<ch::Column>;
-
-using GetterFunc = std::variant<uint64_t    (*)(const HttpLogRecord::Reader&),
-                                uint16_t    (*)(const HttpLogRecord::Reader&),
-                                std::string (*)(const HttpLogRecord::Reader&)>;
-
-using ReturnType = std::variant<uint64_t, uint16_t, std::string>;
-struct ColTripletNew {
-    std::string                                             name;
-    ColPtr                                                  col_ptr;
-    std::function<ReturnType(const HttpLogRecord::Reader&)> getter;
-};
-
-#define COL_TRIPLETS_SIZE 9
-std::array<ColTripletNew, COL_TRIPLETS_SIZE> getFreshColumnTripletsNew() {
-    return {
-        ColTripletNew{"timestamp", std::make_shared<ch::ColumnUInt64>(),
-                      [](const HttpLogRecord::Reader& log_record) {
-                          return log_record.getTimestampEpochMilli();
-                      }},
-        ColTripletNew{"resource_id", std::make_shared<ch::ColumnUInt64>(),
-                      [](const HttpLogRecord::Reader& log_record) {
-                          return log_record.getResourceId();
-                      }},
-        ColTripletNew{"bytes_sent", std::make_shared<ch::ColumnUInt64>(),
-                      [](const HttpLogRecord::Reader& log_record) {
-                          return log_record.getBytesSent();
-                      }},
-        ColTripletNew{"request_time_milli",
-                      std::make_shared<ch::ColumnUInt64>(),
-                      [](const HttpLogRecord::Reader& log_record) {
-                          return log_record.getRequestTimeMilli();
-                      }},
-        ColTripletNew{"response_status", std::make_shared<ch::ColumnUInt16>(),
-                      [](const HttpLogRecord::Reader& log_record) {
-                          return log_record.getResponseStatus();
-                      }},
-        ColTripletNew{"cache_status", std::make_shared<ch::ColumnString>(),
-                      [](const HttpLogRecord::Reader& log_record) {
-                          return log_record.hasCacheStatus()
-                                     ? log_record.getCacheStatus().cStr()
-                                     : "";
-                      }},
-        ColTripletNew{"method", std::make_shared<ch::ColumnString>(),
-                      [](const HttpLogRecord::Reader& log_record) {
-                          return log_record.hasMethod()
-                                     ? log_record.getMethod().cStr()
-                                     : "";
-                      }},
-        ColTripletNew{"remote_addr", std::make_shared<ch::ColumnString>(),
-                      [](const HttpLogRecord::Reader& log_record) {
-                          return log_record.hasRemoteAddr()
-                                     ? log_record.getRemoteAddr().cStr()
-                                     : "";
-                      }},
-        ColTripletNew{"url", std::make_shared<ch::ColumnString>(),
-                      [](const HttpLogRecord::Reader& log_record) {
-                          return log_record.hasUrl()
-                                     ? log_record.getUrl().cStr()
-                                     : "";
-                      }}};
-}
-
-void initBlockWithColumns(
-    ch::Block&                                   block,
-    std::array<ColTripletNew, COL_TRIPLETS_SIZE> col_triplets) {
+void initBlockWithColumns(ch::Block&                     block,
+                          const std::vector<ColTriplet>& col_triplets) {
     for (auto& column : col_triplets)
         block.AppendColumn(column.name, column.col_ptr);
 }
 
-// clear columns
 template <typename Iter>
 void IPAnonymizer::clearColumns(Iter first, Iter last) {
-    // use column->clear() to clear the column
     for (auto it = first; it != last; ++it) {
         it->col_ptr->Clear();
     }
 }
 
-void createLogEntryInBlock(
-    const cppkafka::Buffer&                       payload,
-    std::array<ColTripletNew, COL_TRIPLETS_SIZE>& col_triplets) {
-    using ColPair = std::pair<std::string, ColPtr>;
-
+void createLogEntryInBlock(const cppkafka::Buffer&  payload,
+                           std::vector<ColTriplet>& col_triplets) {
     kj::ArrayInputStream array_input_stream(
         {payload.get_data(), payload.get_size()});
     capnp::InputStreamMessageReader message_reader(array_input_stream);
@@ -147,8 +77,8 @@ void IPAnonymizer::consumeAndBufferLogs(const std::string& topic, int timeout) {
     consumer_->subscribe({topic});
     consumer_->set_timeout(std::chrono::milliseconds(timeout));
 
-    auto col_triplets = getFreshColumnTripletsNew();
-    initBlockWithColumns(log_buffer_, col_triplets);
+    ColumnBuffer buffer(getColumnConfigurations());
+    buffer.initBlockWithColumns(log_buffer_);
 
     while (true) {
         cppkafka::Message message = consumer_->poll();
@@ -158,13 +88,12 @@ void IPAnonymizer::consumeAndBufferLogs(const std::string& topic, int timeout) {
                       << message.get_error() << std::endl;
             continue;
         }
-
-        createLogEntryInBlock(message.get_payload(), col_triplets);
+        buffer.createLogEntryInBlock(message.get_payload());
 
         if (log_buffer_.GetRowCount() >= MAX_BUFFER_SIZE) {
             ch_client_->Insert("http_logs", log_buffer_);
             log_buffer_ = ch::Block();
-            clearColumns(col_triplets.begin(), col_triplets.end());
+            buffer.clearColumns();
         }
     }
 }
