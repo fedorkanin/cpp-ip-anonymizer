@@ -5,22 +5,21 @@
 
 #include "ColumnBuffer.hpp"
 
-ColumnBuffer::ColumnBuffer(const std::vector<ColTriplet>& configs)
-    : columnConfigs_(configs) {}
-
-void ColumnBuffer::initBlockWithColumns(ch::Block& block) {
-    for (const auto& config : columnConfigs_) {
+ch::Block ColumnBuffer::exportToBlockShallow() {
+    ch::Block block;
+    for (const auto& config : col_triplet_vec_) {
         block.AppendColumn(config.name, config.col_ptr);
     }
+    return block;
 }
 
-void ColumnBuffer::createLogEntryInBlock(const cppkafka::Buffer& payload) {
+void ColumnBuffer::append(const cppkafka::Buffer& payload) {
     kj::ArrayInputStream array_input_stream(
         {payload.get_data(), payload.get_size()});
     capnp::InputStreamMessageReader message_reader(array_input_stream);
     HttpLogRecord::Reader log_record = message_reader.getRoot<HttpLogRecord>();
 
-    for (auto& config : columnConfigs_) {
+    for (auto& config : col_triplet_vec_) {
         ReturnType value = config.getter(log_record);
         std::visit(
             [&](auto&& arg) {
@@ -41,11 +40,11 @@ void ColumnBuffer::createLogEntryInBlock(const cppkafka::Buffer& payload) {
 }
 
 void ColumnBuffer::clearColumns() {
-    for (auto& config : columnConfigs_) {
+    for (auto& config : col_triplet_vec_) {
         config.col_ptr->Clear();
     }
 }
-std::vector<ColTriplet> getColumnConfigurations() {
+std::vector<ColTriplet> getFreshColumns() {
     return {ColTriplet{"timestamp",
                        [](const HttpLogRecord::Reader& log_record) {
                            return log_record.getTimestampEpochMilli();

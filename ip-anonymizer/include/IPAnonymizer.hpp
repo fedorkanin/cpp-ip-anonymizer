@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "ClickHouseClientFactory.hpp"
+#include "ColumnBuffer.hpp"
 
 class IPAnonymizer {
    public:
@@ -22,11 +23,12 @@ class IPAnonymizer {
    private:
     std::unique_ptr<cppkafka::Consumer> consumer_;
     std::unique_ptr<clickhouse::Client> ch_client_;
-    clickhouse::Block                   log_buffer_;
     const size_t                        MAX_BUFFER_SIZE = 1;
 
-    template <typename Iter>
-    void        clearColumns(Iter first, Iter last);
-
     std::string anonymizeIP(const std::string ip_address);
+    void        handleMessageError(const cppkafka::Error& error);
+    bool        shouldInsert(
+               const std::chrono::system_clock::time_point& lastInsertTime) const;
+    void attemptInsert(ColumnBuffer&                          buffer,
+                       std::chrono::system_clock::time_point& lastInsertTime);
 };

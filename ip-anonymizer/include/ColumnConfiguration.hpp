@@ -23,4 +23,4 @@ struct ColTriplet {
     std::shared_ptr<ch::Column>                             col_ptr;
 };
 
-std::vector<ColTriplet> getColumnConfigurations();
+std::vector<ColTriplet> getFreshColumns();

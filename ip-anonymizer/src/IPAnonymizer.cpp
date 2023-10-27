@@ -29,71 +29,51 @@ std::string IPAnonymizer::anonymizeIP(const std::string ip_address) {
     return ip_address.substr(0, lastDotPos) + ".X";
 }
 
-void initBlockWithColumns(ch::Block&                     block,
-                          const std::vector<ColTriplet>& col_triplets) {
-    for (auto& column : col_triplets)
-        block.AppendColumn(column.name, column.col_ptr);
-}
-
-template <typename Iter>
-void IPAnonymizer::clearColumns(Iter first, Iter last) {
-    for (auto it = first; it != last; ++it) {
-        it->col_ptr->Clear();
-    }
-}
-
-void createLogEntryInBlock(const cppkafka::Buffer&  payload,
-                           std::vector<ColTriplet>& col_triplets) {
-    kj::ArrayInputStream array_input_stream(
-        {payload.get_data(), payload.get_size()});
-    capnp::InputStreamMessageReader message_reader(array_input_stream);
-    HttpLogRecord::Reader log_record = message_reader.getRoot<HttpLogRecord>();
-
-    // loop through the columns and add the values to the columns
-    for (auto& col_triplet : col_triplets) {
-        ReturnType value = col_triplet.getter(log_record);
-        std::visit(
-            [&](auto&& arg) {
-                using T = std::decay_t<decltype(arg)>;
-                if constexpr (std::is_same_v<T, uint64_t>) {
-                    std::static_pointer_cast<ch::ColumnUInt64>(
-                        col_triplet.col_ptr)
-                        ->Append(arg);
-                } else if constexpr (std::is_same_v<T, uint16_t>) {
-                    std::static_pointer_cast<ch::ColumnUInt16>(
-                        col_triplet.col_ptr)
-                        ->Append(arg);
-                } else if constexpr (std::is_same_v<T, std::string>) {
-                    std::static_pointer_cast<ch::ColumnString>(
-                        col_triplet.col_ptr)
-                        ->Append(arg);
-                }
-            },
-            value);
-    }
-}
-
 void IPAnonymizer::consumeAndBufferLogs(const std::string& topic, int timeout) {
     consumer_->subscribe({topic});
     consumer_->set_timeout(std::chrono::milliseconds(timeout));
 
-    ColumnBuffer buffer(getColumnConfigurations());
-    buffer.initBlockWithColumns(log_buffer_);
+    ColumnBuffer buffer(std::move(getFreshColumns()));
+    auto         last_instert_time = std::chrono::system_clock::now();
 
     while (true) {
         cppkafka::Message message = consumer_->poll();
+
         if (!message) continue;
         if (message.get_error()) {
-            std::cerr << "Error while consuming message: "
-                      << message.get_error() << std::endl;
+            handleMessageError(message.get_error());
             continue;
         }
-        buffer.createLogEntryInBlock(message.get_payload());
 
-        if (log_buffer_.GetRowCount() >= MAX_BUFFER_SIZE) {
-            ch_client_->Insert("http_logs", log_buffer_);
-            log_buffer_ = ch::Block();
-            buffer.clearColumns();
+        buffer.append(message.get_payload());
+
+        if (shouldInsert(last_instert_time)) {
+            attemptInsert(buffer, last_instert_time);
         }
+    }
+}
+
+void IPAnonymizer::handleMessageError(const cppkafka::Error& error) {
+    std::cerr << "Error while consuming message: " << error << std::endl;
+}
+
+bool IPAnonymizer::shouldInsert(
+    const std::chrono::system_clock::time_point& last_insert_time) const {
+    using namespace std::chrono;
+    auto currentTime = system_clock::now();
+    return duration_cast<seconds>(currentTime - last_insert_time).count() > 60;
+}
+
+void IPAnonymizer::attemptInsert(
+    ColumnBuffer&                          buffer,
+    std::chrono::system_clock::time_point& lastInsertTime) {
+    try {
+        ch_client_->Insert("http_logs", buffer.exportToBlockShallow());
+        buffer.clearColumns();
+        lastInsertTime = std::chrono::system_clock::now();
+    } catch (const std::exception& e) {
+        std::cerr << "Error while inserting to ClickHouse: " << e.what()
+                  << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }
