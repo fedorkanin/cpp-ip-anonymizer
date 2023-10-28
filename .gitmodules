@@ -2,3 +2,6 @@
 	path = ip-anonymizer/external/clickhouse-cpp
 	url = https://github.com/ClickHouse/clickhouse-cpp.git
 
+[submodule "ip-anonymizer/external/HTTPRequest"]
+	path = ip-anonymizer/external/HTTPRequest
+	url = https://github.com/elnormous/HTTPRequest.git
