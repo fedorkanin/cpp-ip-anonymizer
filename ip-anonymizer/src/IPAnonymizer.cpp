@@ -16,10 +16,13 @@
 namespace ch = clickhouse;
 
 IPAnonymizer::IPAnonymizer(cppkafka::Configuration kafka_consumer_config,
-                           std::string             clickhouse_host)
+                           const clickhouse::ClientOptions& clickhouse_config)
     : IPAnonymizer(
           std::make_unique<cppkafka::Consumer>(kafka_consumer_config),
-          ClickHouseClientFactory::createClickHouseClient(clickhouse_host)) {}
+          ClickHouseClientFactory::createClickHouseClient(clickhouse_config)) {
+    if (!ch_client_)
+        throw std::runtime_error("Failed to create ClickHouse client");
+}
 
 std::string IPAnonymizer::anonymizeIP(const std::string ip_address) {
     size_t lastDotPos = ip_address.rfind('.');
@@ -44,6 +47,7 @@ void IPAnonymizer::consumeAndBufferLogs(const std::string& topic, int timeout) {
         "url String"
         ") ENGINE = MergeTree() ORDER BY timestamp");
 
+    // create a materialized view if it doesn't exist
     ch_client_->Execute(
         "CREATE MATERIALIZED VIEW IF NOT EXISTS http_log_aggregated "
         "ENGINE = SummingMergeTree() "

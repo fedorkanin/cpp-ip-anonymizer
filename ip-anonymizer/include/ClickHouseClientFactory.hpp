@@ -9,15 +9,6 @@
 // on creation
 class ClickHouseClientFactory {
    public:
-    static int                                 testClickhouse();
-
     static std::unique_ptr<clickhouse::Client> createClickHouseClient(
-        const std::string& host);
-
-   private:
-    using DataRow = std::tuple<uint64_t, std::string>;
-    static void createAndPopulateTable(clickhouse::Client&         client,
-                                       const std::vector<DataRow>& values);
-    static bool checkValues(clickhouse::Client&         client,
-                            const std::vector<DataRow>& values);
+        const clickhouse::ClientOptions& options);
 };

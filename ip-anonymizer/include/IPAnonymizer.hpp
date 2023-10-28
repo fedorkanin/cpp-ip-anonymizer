@@ -11,16 +11,16 @@
 
 class IPAnonymizer {
    public:
-    IPAnonymizer(std::unique_ptr<cppkafka::Consumer>&& consumer,
-                 std::unique_ptr<clickhouse::Client>&& chClient)
-        : consumer_(std::move(consumer)), ch_client_(std::move(chClient)) {}
-
-    IPAnonymizer(cppkafka::Configuration kafka_consumer_config,
-                 std::string             clickhouse_host);
+    IPAnonymizer(cppkafka::Configuration          kafka_consumer_config,
+                 const clickhouse::ClientOptions& clickhouse_config);
 
     void consumeAndBufferLogs(const std::string& topic, int timeout);
 
    private:
+    IPAnonymizer(std::unique_ptr<cppkafka::Consumer>&& consumer,
+                 std::unique_ptr<clickhouse::Client>&& chClient)
+        : consumer_(std::move(consumer)), ch_client_(std::move(chClient)) {}
+
     std::unique_ptr<cppkafka::Consumer> consumer_;
     std::unique_ptr<clickhouse::Client> ch_client_;
 

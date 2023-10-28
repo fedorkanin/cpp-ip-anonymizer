@@ -21,6 +21,9 @@ void ColumnBuffer::append(const cppkafka::Buffer& payload) {
 
     for (auto& config : col_triplet_vec_) {
         ReturnType value = config.getter(log_record);
+        // ideally, this visit must be a double dispatch, but it requires more
+        // time to implement. For now, the code relies on the correctness of the
+        // getFreshColumns() config.
         std::visit(
             [&](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
@@ -47,6 +50,9 @@ void ColumnBuffer::clearColumns() {
         config.col_ptr->Clear();
     }
 }
+
+// here, the return type of the lambda must strictly match the type of the
+// column, otherwise segfaults will occur. Double dispatch solution required.
 std::vector<ColTriplet> getFreshColumns() {
     return {ColTriplet{"timestamp",
                        [](const HttpLogRecord::Reader& log_record) {
