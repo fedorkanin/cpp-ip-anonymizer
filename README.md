@@ -103,3 +103,85 @@ ClickHouse should be accessed through a proxy running on HTTP port 8124.
 For convenience, [Kafka-UI](localhost:4000/) and [Grafana](localhost:3000/) are running
 (user `admin` and password `kafka`) that might be useful if you run into any trouble
 with Kafka.
+
+
+# Task completion report
+
+## Research
+
+The initial research was mainly focused on finding and setting up the dependencies of the future project. I chose to complete the project in C++ using the Cap'n Proto, cppkafka, and clickhouse-cpp libraries.
+## Environment
+
+The whole project is running with docker compose, so I wanted to maintain the simplicity of launching the project using a single command (via ```docker compose build&&docker compose up -d```). To do that, I created a two-stage Dockerfile, which compiles the projects and it's dependencies, and then passes the compiled binary and shared libraries to the next stage, which runs the executable. 
+
+Developing on Mac with ARM architecture, I faced multiple problems, since some libraries don't compile correctly in ARM docker containers. After tweaking the container for around 8 hours total before and in the process of development, I achieved stable builds with automatic dependency fetching, installation and linking. One of the important features of my Dockerfile is manual caching of main executable build artifacts via ```--mount=type=cache```. It allows for effective recompilation across multiple builds, which is extremely important for development and reduces the time for compilation of the main binary from 30s to around 3s. 
+
+**In the end, my whole code requires no dependencies for building and running, except for Docker.**
+
+## C++ development
+
+### ClickHouse
+I began with developing a client wrapper for the cpp-clickhouse client, as I sure would need some specific functionality and automation. I didn't want any proxy restrictions, so I developed a simple client that would connect to the ClickHouse container directly, using the default port 9000. Somehow the cpp-clickhouse client didn't have an option to be lazy and required connection to DB on creation, so I needed to recreate it multiple times, before the DB was up and running, which is not an ideal solution, but it worked. In the end, I achieved a stable connection with ClickHouse and was able to insert or select values and create tables. 
+
+### Kafka client and Cap'n Proto decoding
+Configuring the Kafka client was more straightforward than ClickHouse. After successfully receiving raw messages from Kafka broker, I compiled the Cap'n Proto schema into h and cpp files, and successfully decoded fields of the message. 
+
+### Polymorphism of `Columns` and `getters`
+At this point I faced a challenge: Cap'n Proto library didn't offer any way to loop through getters of the `HttpLogRecord::Reader`. I always prioritize code maintainability and extensibility, so it should be easily adaptable to new schemas. Moreover, to insert values to ClickHouse client's columns, I required a name and a type of a column. Polymorphism of the `Column` class in clickhouse-cpp is very poor and does not have any polymorphic way to `append`
+to an abstract column, except of casting it with a `dynamic-cast`. The same applies to the getters of Cap'n Proto decoder, they are not generalized in any way by default. To handle the problem, I created a following structure:
+
+```cpp
+using ReturnType = std::variant<uint64_t, uint16_t, std::string, std::time_t>;
+struct ColTriplet {
+    std::string                                             name;
+    std::function<ReturnType(const HttpLogRecord::Reader&)> getter;
+    std::shared_ptr<ch::Column>                             col_ptr;
+};
+```
+This triplet stores everything required to get, cast and append a value from Cap'n Proto message to ClickHouse ```Column```. The config looks like this:
+```cpp
+std::vector<ColTriplet> getFreshColumns() {
+    return {ColTriplet{"timestamp",
+                       [](const HttpLogRecord::Reader& log_record) {
+                           return static_cast<time_t>(
+                               log_record.getTimestampEpochMilli() / 1000);
+                       },
+                       std::make_shared<ch::ColumnDateTime>()},
+            ColTriplet{"resource_id",
+                       [](const HttpLogRecord::Reader& log_record) {
+                           return log_record.getResourceId();
+                       },
+                       std::make_shared<ch::ColumnUInt64>()},
+                       ...
+```
+
+**In the end, I achieved a generalized and flexible solution, that requires minimal changes in the code, in case of Cap'n Proto schema change.** 
+The drawback of the solution is that in case of wrong configuration (incorrect column-getter pair), the compiler won't notice the error, which will lead to incorrect cast, and, possibly, to segfault. Fortunately in this case, the error can be discovered right away, when the first message is decoded. In order for the code to be completely type-safe, a non-intrusive double dispatch solution with `std::visitor` is required here, in order to handle `Abstract Value` (`ReturnType`, in my case) and `Abstract Column` interactions (appending `AV` to `AT`, getting `AV` from getters). It is going to be non-intrusive, fast and type-safe, but requires time to code and test.
+
+### Bufferization
+
+The bufferization in my code is pretty straightforward. When receiving Kafka messages, I append their content to a proprietary `ColumnBuffer`, as the default ClickHouse `block` won't allow for an easy management of it's columns. When it's time to insert the data to ClickHouse, I can easily and effectively append to columns to a `block` and insert it via `client->Insert()`. 
+
+### Error handling
+
+In case the insertion is unsuccessful an attempt to insert the buffer is made every 1 second. The data can be lost in case ClickHouse is offline too long and the anonymizer runs out of RAM to store the bufferized data.
+
+### Estimates
+
+Roughly estimating the log record to be $200$ bytes, and the aggregated message to be around $80$ bytes,  the overall disk space occupied will be around $280*N$. The actual number might be lower, as ClickHouse can compress data. 
+
+### DB connection protocols
+
+When I had a mechanism of receiving, decoding, bufferizing and inserting messages, it was time to test it with a proxy restricting my queries to one per minute. Here I found out, that clickhouse-cpp client communicates with ClickHouse via an effective Native protocol, whereas the proxy operates with HTTP requests. There is no embedded functionality in the clickhouse-cpp client to communicate with DB via HTTP, so it has to be implemented manually. The most balanced way of implementing it would be encoding the `ColumnBuffer` rows into Cap'n Proto messages and sending them with HTTP to the ClickHouse, but it requires more time recourses, which I at the moment don't possess, as overall the current solution took me around 10 days (mixed with study, of course).
+
+### Possible improvements
+
+- Implement a retry mechanism with exponential backoff for more efficient and seamless database connections.
+- Enhance type safety by leveraging `std::visitor` for robust error handling and to prevent potential segmentation faults.
+- Develop or integrate an HTTP-capable ClickHouse client to cater to both Native and HTTP protocol requirements.
+- Run benchmarks to obtain accurate disk space estimates, factoring in ClickHouse's data compression.
+- Conduct comprehensive testing, covering functionality, load scenarios, and performance benchmarks.one.
+
+## Summary
+
+I think my solution is extensible and maintainable, but there are a lot of things to make better, which I attempted to highlight in the report above. 
