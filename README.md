@@ -172,16 +172,16 @@ Roughly estimating the log record to be $200$ bytes, and the aggregated message 
 
 ### DB connection protocols
 
-When I had a mechanism of receiving, decoding, bufferizing and inserting messages, it was time to test it with a proxy restricting my queries to one per minute. Here I found out, that clickhouse-cpp client communicates with ClickHouse via an effective Native protocol, whereas the proxy operates with HTTP requests. There is no embedded functionality in the clickhouse-cpp client to communicate with DB via HTTP, so it has to be implemented manually. The most balanced way of implementing it would be encoding the `ColumnBuffer` rows into Cap'n Proto messages and sending them with HTTP to the ClickHouse, but it requires more time recourses, which I at the moment don't possess, as overall the current solution took me around 10 days (mixed with study, of course).
+When I had a mechanism of receiving, decoding, bufferizing and inserting messages, it was time to test it with a proxy restricting my queries to one per minute. Here I found out, that clickhouse-cpp client communicates with ClickHouse via an effective Native protocol, whereas the proxy operates with HTTP requests. There is no embedded functionality in the clickhouse-cpp client to communicate with DB via HTTP, so it has to be implemented manually. The most balanced way of implementing it would be encoding the `ColumnBuffer` rows into Cap'n Proto messages and sending them with HTTP to the ClickHouse, but it requires more time resourses, which I at the moment don't possess, as overall the current solution took me around 10 days (mixed with study, of course).
 
 ### Possible improvements
 
 - Implement a retry mechanism with exponential backoff for more efficient and seamless database connections.
-- Enhance type safety by leveraging `std::visitor` for robust error handling and to prevent potential segmentation faults.
+- Enhance type safety via double dispatch
 - Develop or integrate an HTTP-capable ClickHouse client to cater to both Native and HTTP protocol requirements.
-- Run benchmarks to obtain accurate disk space estimates, factoring in ClickHouse's data compression.
-- Conduct comprehensive testing, covering functionality, load scenarios, and performance benchmarks.one.
+- Run benchmarks to obtain accurate disk space estimates, taking into account ClickHouse's data compression.
+- Conduct comprehensive testing, covering functionality, load scenarios, and performance benchmarks.
 
 ## Summary
 
-I think my solution is extensible and maintainable, but there are a lot of things to make better, which I attempted to highlight in the report above. 
+I think my solution is extensible and maintainable, but there are a lot of things to make better, which I attempted to highlight in the report above. Coding it was interesting and I enjoyed it a lot. 
