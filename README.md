@@ -115,6 +115,7 @@ The initial research was mainly focused on finding and setting up the dependenci
 The whole project is running with docker compose, so I wanted to maintain the simplicity of launching the project using a single command (via ```docker compose build&&docker compose up -d```). To do that, I created a two-stage Dockerfile, which compiles the projects and it's dependencies, and then passes the compiled binary and shared libraries to the next stage, which runs the executable. 
 
 Developing on Mac with ARM architecture, I faced multiple problems, since some libraries don't compile correctly in ARM docker containers. After tweaking the container for around 8 hours total before and in the process of development, I achieved stable builds with automatic dependency fetching, installation and linking. One of the important features of my Dockerfile is manual caching of main executable build artifacts via ```--mount=type=cache```. It allows for effective recompilation across multiple builds, which is extremely important for development and reduces the time for compilation of the main binary from 30s to around 3s. 
+The code can be run with `docker compose build&&docker compose up -d`. To see the logs of my module, run `docker compose logs --follow ip-anonymizer`.
 
 **In the end, my whole code requires no dependencies for building and running, except for Docker.**
 
